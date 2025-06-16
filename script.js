@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resetSessionBtn.addEventListener('click', startNewSession);
 
     // Display questions on the page and trigger MathJax rendering
-    function displayQuestions(questions) {
+    async function displayQuestions(questions) {
         questionListDiv.innerHTML = ''; // Clear previous questions
         if (questions.length === 0) {
             questionListDiv.innerHTML = '<p>No questions to display.</p>';
@@ -152,19 +152,21 @@ document.addEventListener('DOMContentLoaded', () => {
             questionListDiv.appendChild(questionItem);
         });
 
-        // Crucial: Tell MathJax to re-render the newly added content
-        // Check if MathJax is defined before calling its method
-        if (typeof MathJax !== 'undefined') {
-            console.log("Calling MathJax.typesetPromise()...");
-            MathJax.typesetPromise()
-                .then(() => {
-                    console.log("MathJax typesetting complete.");
-                })
-                .catch((err) => {
-                    console.error("MathJax typesetting failed:", err);
-                });
+        // Crucial: Wait for MathJax to be ready and then typeset
+        if (window.MathJax) {
+            // Use MathJax.startup.promise to ensure MathJax is fully loaded and configured
+            await MathJax.startup.promise;
+            console.log("MathJax is ready, triggering typesetting for new content.");
+            try {
+                // This will re-process the entire document for math, which is safe.
+                // Alternatively, MathJax.typesetPromise([questionListDiv]); for specific element.
+                await MathJax.typesetPromise();
+                console.log("MathJax typesetting complete for current batch.");
+            } catch (err) {
+                console.error("MathJax typesetting failed:", err);
+            }
         } else {
-            console.warn("MathJax not loaded yet or not found when attempting to typeset.");
+            console.warn("MathJax object not found. Ensure the MathJax script is loaded in index.html.");
         }
     }
 
