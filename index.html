@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Questions Generator</title>
+    <link rel="stylesheet" href="style.css">
+    <script type="text/javascript" id="MathJax-script" async
+            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Math Questions Generator</h1>
+
+        <div class="selection-section">
+            <h2>Select Question Databases</h2>
+            <div id="database-checkboxes">
+                </div>
+            <button id="generate-questions-btn">Generate 5 Questions</button>
+            <button id="reset-session-btn" style="display: none;">Start New Session</button>
+        </div>
+
+        <div class="questions-section" id="questions-display">
+            <h2>Your Questions:</h2>
+            <div id="question-list">
+                </div>
+        </div>
+
+        <div id="session-message" class="message"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
