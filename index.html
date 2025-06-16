@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Math Questions Generator</title>
     <link rel="stylesheet" href="style.css">
+
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']], // Enable single dollar for inline math
+                displayMath: [['$$', '$$'], ['\\[', '\\]']], // Ensure double dollar for display math
+                packages: {'[+]': ['ams', 'newcommand']} // Add ams and newcommand for better LaTeX support
+            },
+            startup: {
+                typeset: false // Prevent MathJax from typesetting on initial load, we'll do it manually
+            }
+        };
+    </script>
+
     <script type="text/javascript" id="MathJax-script" async
             src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
     </script>
