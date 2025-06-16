@@ -10,24 +10,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allQuestions = {}; // Stores questions categorized by database name
     let availableQuestionsForSession = []; // Questions remaining for the current session
-    let currentSessionQuestions = []; // Questions shown in the current session
     const questionsPerBatch = 5;
 
     // Function to extract a unique ID and content from an H2-separated question block
     function parseQuestionsFromMarkdown(markdownContent) {
         const questions = [];
         // Split by H2 headings (e.g., "## AlgQ1")
-        const questionBlocks = markdownContent.split(/^##\s*(.+)$/gm).slice(1); // Remove leading empty string
+        // The regex captures the heading text (group 1) and then the content following it.
+        // We use a non-greedy match for content until the next H2 or end of string.
+        const regex = /^##\s*(.+)\n([\s\S]*?)(?=(^##\s*|$))/gm;
+        let match;
 
-        for (let i = 0; i < questionBlocks.length; i += 2) {
-            const id = questionBlocks[i].trim();
-            let content = questionBlocks[i + 1].trim();
-
-            // Remove the main H1 title if present at the very beginning of content
-            if (content.startsWith('# ')) {
-                content = content.substring(content.indexOf('\n') + 1).trim();
-            }
-
+        while ((match = regex.exec(markdownContent)) !== null) {
+            const id = match[1].trim();
+            const content = match[2].trim();
             questions.push({ id, content });
         }
         return questions;
@@ -60,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error(`Error loading ${file}:`, error);
                 const errorMessage = document.createElement('p');
                 errorMessage.style.color = 'red';
-                errorMessage.textContent = `Could not load ${dbName} questions.`;
+                errorMessage.textContent = `Could not load ${dbName} questions. Please check the file path and content.`;
                 databaseCheckboxesDiv.appendChild(errorMessage);
             }
         }
@@ -69,7 +65,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize a new session
     function startNewSession() {
         availableQuestionsForSession = [];
-        currentSessionQuestions = [];
         questionListDiv.innerHTML = '';
         sessionMessageDiv.textContent = 'Select databases and generate questions.';
         generateBtn.disabled = false;
@@ -89,8 +84,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // If starting a new selection or previous pool is exhausted, populate the pool
         if (availableQuestionsForSession.length === 0) {
-            // First time generating or all questions from previous session used
             const uniqueQuestionsFromSelectedDBs = new Set();
             selectedDBs.forEach(dbName => {
                 if (allQuestions[dbName]) {
@@ -98,21 +93,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
             availableQuestionsForSession = Array.from(uniqueQuestionsFromSelectedDBs).map(qStr => JSON.parse(qStr));
-            currentSessionQuestions = []; // Reset current session questions for a new session
-            sessionMessageDiv.textContent = `New session started with ${availableQuestionsForSession.length} total unique questions.`;
-        } else {
-             // Check if all questions are used, if so, prompt to reset
-            if (availableQuestionsForSession.length === 0 && selectedDBs.length > 0) {
-                sessionMessageDiv.textContent = "All available questions from your selection have been shown. Please click 'Start New Session' to get more questions or select new databases.";
+
+            if (availableQuestionsForSession.length === 0) {
+                sessionMessageDiv.textContent = "No questions found in the selected databases. Please check the files or select different databases.";
                 generateBtn.disabled = true;
-                resetSessionBtn.style.display = 'inline-block'; // Show reset button
                 return;
             }
+            sessionMessageDiv.textContent = `New session started with ${availableQuestionsForSession.length} total unique questions.`;
         }
 
+        // Check if all questions are used, if so, prompt to reset
         if (availableQuestionsForSession.length === 0) {
-            sessionMessageDiv.textContent = "No questions found in selected databases. Please check the files or select different databases.";
+            sessionMessageDiv.textContent = "All available questions from your current selection have been shown. Please click 'Start New Session' to get more questions or select new databases.";
             generateBtn.disabled = true;
+            resetSessionBtn.style.display = 'inline-block'; // Show reset button
             return;
         }
 
@@ -122,15 +116,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (let i = 0; i < numToPick; i++) {
             const randomIndex = Math.floor(Math.random() * availableQuestionsForSession.length);
-            const question = availableQuestionsForSession.splice(randomIndex, 1)[0]; // Remove from available
+            // Splice removes the item and returns an array of the removed item(s)
+            const question = availableQuestionsForSession.splice(randomIndex, 1)[0];
             questionsToDisplay.push(question);
-            currentSessionQuestions.push(question); // Add to current session history
         }
 
         displayQuestions(questionsToDisplay);
 
         if (availableQuestionsForSession.length === 0) {
-            sessionMessageDiv.textContent = "All available questions from your selection have been shown. Please click 'Start New Session' to get more questions or select new databases.";
+            sessionMessageDiv.textContent = "All available questions from your current selection have been shown. Please click 'Start New Session' to get more questions or select new databases.";
             generateBtn.disabled = true;
             resetSessionBtn.style.display = 'inline-block';
         } else {
@@ -142,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event listener for Reset Session button
     resetSessionBtn.addEventListener('click', startNewSession);
 
-    // Display questions on the page
+    // Display questions on the page and trigger MathJax rendering
     function displayQuestions(questions) {
         questionListDiv.innerHTML = ''; // Clear previous questions
         if (questions.length === 0) {
@@ -153,18 +147,29 @@ document.addEventListener('DOMContentLoaded', () => {
         questions.forEach(q => {
             const questionItem = document.createElement('div');
             questionItem.classList.add('question-item');
+            // Directly set innerHTML. MathJax will process this.
             questionItem.innerHTML = `<h3>${q.id}</h3>${q.content}`;
             questionListDiv.appendChild(questionItem);
         });
 
-        // Typeset (render) math equations after new content is added
+        // Crucial: Tell MathJax to re-render the newly added content
+        // Check if MathJax is defined before calling its method
         if (typeof MathJax !== 'undefined') {
-            MathJax.typesetPromise();
+            console.log("Calling MathJax.typesetPromise()...");
+            MathJax.typesetPromise()
+                .then(() => {
+                    console.log("MathJax typesetting complete.");
+                })
+                .catch((err) => {
+                    console.error("MathJax typesetting failed:", err);
+                });
+        } else {
+            console.warn("MathJax not loaded yet or not found when attempting to typeset.");
         }
     }
 
-    // Initial load
+    // Initial load: Load databases and then start a new session
     loadQuestionDatabases().then(() => {
-        startNewSession(); // Initialize the session once databases are loaded
+        startNewSession();
     });
 });
