@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sessionMessageDiv = document.getElementById('session-message');
 
     const questionsBasePath = './questions/';
-    const questionFiles = ['algebra.md', 'calculus.md', 'geometry.md']; // Add more as you create them
+    const databaseListFile = 'databases.csv'; // <--- NEW: Path to your CSV file
 
     let allQuestions = {}; // Stores questions categorized by database name
     let availableQuestionsForSession = []; // Questions remaining for the current session
@@ -15,9 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Function to extract a unique ID and content from an H2-separated question block
     function parseQuestionsFromMarkdown(markdownContent) {
         const questions = [];
-        // Split by H2 headings (e.g., "## AlgQ1")
-        // The regex captures the heading text (group 1) and then the content following it.
-        // We use a non-greedy match for content until the next H2 or end of string.
         const regex = /^##\s*(.+)\n([\s\S]*?)(?=(^##\s*|$))/gm;
         let match;
 
@@ -29,14 +26,42 @@ document.addEventListener('DOMContentLoaded', () => {
         return questions;
     }
 
+    // NEW FUNCTION: Fetch and parse the list of question database files from CSV
+    async function fetchQuestionFileList() {
+        try {
+            const response = await fetch(databaseListFile);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status} for ${databaseListFile}`);
+            }
+            const csvText = await response.text();
+            // Split by new line, filter out empty lines, and trim whitespace
+            return csvText.split('\n')
+                          .map(line => line.trim())
+                          .filter(line => line.length > 0);
+        } catch (error) {
+            console.error(`Error fetching database list:`, error);
+            sessionMessageDiv.textContent = `Error loading database list: ${error.message}. Check '${databaseListFile}'.`;
+            generateBtn.disabled = true; // Disable generation if list can't be loaded
+            return []; // Return empty array to prevent further errors
+        }
+    }
+
     // Load question files and populate checkboxes
     async function loadQuestionDatabases() {
+        const questionFiles = await fetchQuestionFileList(); // <--- CHANGE: Get files from CSV
+
+        if (questionFiles.length === 0) {
+            sessionMessageDiv.textContent = "No question databases found in 'databases.csv'. Please add filenames to it.";
+            generateBtn.disabled = true;
+            return;
+        }
+
         for (const file of questionFiles) {
-            const dbName = file.replace('.md', ''); // e.g., 'algebra'
+            const dbName = file.replace('.md', '');
             try {
                 const response = await fetch(`${questionsBasePath}${file}`);
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`HTTP error! status: ${response.status} for ${file}`);
                 }
                 const markdown = await response.text();
                 allQuestions[dbName] = parseQuestionsFromMarkdown(markdown);
@@ -48,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 checkbox.value = dbName;
                 checkbox.id = `db-${dbName}`;
                 label.htmlFor = `db-${dbName}`;
-                label.textContent = dbName.charAt(0).toUpperCase() + dbName.slice(1); // Capitalize first letter
+                label.textContent = dbName.charAt(0).toUpperCase() + dbName.slice(1).replace(/_/g, ' '); // Capitalize and replace underscores
                 label.prepend(checkbox);
                 databaseCheckboxesDiv.appendChild(label);
 
@@ -56,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error(`Error loading ${file}:`, error);
                 const errorMessage = document.createElement('p');
                 errorMessage.style.color = 'red';
-                errorMessage.textContent = `Could not load ${dbName} questions. Please check the file path and content.`;
+                errorMessage.textContent = `Could not load ${dbName} questions. Check file: '${questionsBasePath}${file}'.`;
                 databaseCheckboxesDiv.appendChild(errorMessage);
             }
         }
@@ -84,7 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // If starting a new selection or previous pool is exhausted, populate the pool
         if (availableQuestionsForSession.length === 0) {
             const uniqueQuestionsFromSelectedDBs = new Set();
             selectedDBs.forEach(dbName => {
@@ -102,21 +126,18 @@ document.addEventListener('DOMContentLoaded', () => {
             sessionMessageDiv.textContent = `New session started with ${availableQuestionsForSession.length} total unique questions.`;
         }
 
-        // Check if all questions are used, if so, prompt to reset
         if (availableQuestionsForSession.length === 0) {
             sessionMessageDiv.textContent = "All available questions from your current selection have been shown. Please click 'Start New Session' to get more questions or select new databases.";
             generateBtn.disabled = true;
-            resetSessionBtn.style.display = 'inline-block'; // Show reset button
+            resetSessionBtn.style.display = 'inline-block';
             return;
         }
 
-        // Randomly select 5 questions (or fewer if not enough available)
         const questionsToDisplay = [];
         const numToPick = Math.min(questionsPerBatch, availableQuestionsForSession.length);
 
         for (let i = 0; i < numToPick; i++) {
             const randomIndex = Math.floor(Math.random() * availableQuestionsForSession.length);
-            // Splice removes the item and returns an array of the removed item(s)
             const question = availableQuestionsForSession.splice(randomIndex, 1)[0];
             questionsToDisplay.push(question);
         }
@@ -138,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Display questions on the page and trigger MathJax rendering
     async function displayQuestions(questions) {
-        questionListDiv.innerHTML = ''; // Clear previous questions
+        questionListDiv.innerHTML = '';
         if (questions.length === 0) {
             questionListDiv.innerHTML = '<p>No questions to display.</p>';
             return;
@@ -147,19 +168,14 @@ document.addEventListener('DOMContentLoaded', () => {
         questions.forEach(q => {
             const questionItem = document.createElement('div');
             questionItem.classList.add('question-item');
-            // Directly set innerHTML. MathJax will process this.
             questionItem.innerHTML = `<h3>${q.id}</h3>${q.content}`;
             questionListDiv.appendChild(questionItem);
         });
 
-        // Crucial: Wait for MathJax to be ready and then typeset
         if (window.MathJax) {
-            // Use MathJax.startup.promise to ensure MathJax is fully loaded and configured
             await MathJax.startup.promise;
             console.log("MathJax is ready, triggering typesetting for new content.");
             try {
-                // This will re-process the entire document for math, which is safe.
-                // Alternatively, MathJax.typesetPromise([questionListDiv]); for specific element.
                 await MathJax.typesetPromise();
                 console.log("MathJax typesetting complete for current batch.");
             } catch (err) {
@@ -171,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initial load: Load databases and then start a new session
+    // Call loadQuestionDatabases after fetchQuestionFileList is done
     loadQuestionDatabases().then(() => {
         startNewSession();
     });
